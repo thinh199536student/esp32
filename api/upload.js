@@ -17,10 +17,10 @@ export default async function handler(req, res) {
     const form = formidable({
       multiples: false,
       keepExtensions: true,
-      uploadDir: "/tmp", // nơi lưu file tạm trên Vercel
+      uploadDir: "/tmp", // thư mục tạm trên Vercel
     });
 
-    // ⚙️ Parse form-data
+    // ⚙️ Parse form-data (trả về Promise)
     const [fields, files] = await form.parse(req);
 
     // ⚙️ Lấy file đầu tiên
@@ -34,12 +34,11 @@ export default async function handler(req, res) {
     const filePath = uploadedFile.filepath || uploadedFile.path;
     const fileName = uploadedFile.originalFilename || "unknown.wav";
 
-    // ⚙️ Kiểm tra đúng tên file
-    if (fileName !== "rec.wav") {
-      return res.status(400).json({ error: "Sai tên file, cần là rec.wav" });
-    }
+    // ✅ Không bắt buộc phải đúng tên “rec.wav” (nếu bạn chỉ cần upload file)
+    // Nếu bạn muốn giới hạn, có thể bật dòng sau:
+    // if (fileName !== "rec.wav") return res.status(400).json({ error: "Sai tên file, cần là rec.wav" });
 
-    // ⚙️ Kiểm tra dung lượng file thực
+    // ⚙️ Kiểm tra dung lượng file
     const stats = fs.statSync(filePath);
     const size = stats.size;
 
@@ -49,8 +48,9 @@ export default async function handler(req, res) {
     const fileBuffer = fs.readFileSync(filePath);
     const base64Data = fileBuffer.toString("base64");
 
-    // 🚀 Gửi dữ liệu lên Apps Script
-    const scriptUrl = "https://script.google.com/macros/library/d/16SZA-1AAYnbGVUimvIG2DaavRRaKH0gAYzqzFoI4ySDJTOLDFdBgbMzT/3"; // Thay bằng URL thật
+    // 🚀 Gửi dữ liệu lên Google Apps Script (phải là URL /exec)
+    const scriptUrl = "https://script.google.com/macros/s/AKfycbxYourScriptID/exec"; // <-- Thay đúng URL deploy Web App
+
     const response = await fetch(scriptUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -61,14 +61,21 @@ export default async function handler(req, res) {
       }),
     });
 
-    const result = await response.json();
+    // 📥 Đọc kết quả từ Apps Script
+    const text = await response.text();
+    let result;
+    try {
+      result = JSON.parse(text);
+    } catch {
+      result = { raw: text };
+    }
 
     // ✅ Trả phản hồi thành công
     return res.status(200).json({
-      message: "✅ Đã nhận file rec.wav thành công!",
+      message: "✅ Đã nhận và gửi file lên Apps Script thành công!",
       filename: fileName,
       size,
-      savedTo: filePath,
+      scriptResponse: result,
     });
   } catch (err) {
     console.error("🔥 Lỗi xử lý file:", err);
@@ -77,5 +84,3 @@ export default async function handler(req, res) {
     });
   }
 }
-
-
