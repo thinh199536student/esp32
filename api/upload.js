@@ -32,7 +32,6 @@ export default async function handler(req, res) {
     const uploadedFile = Array.isArray(file) ? file[0] : file;
     const filePath = uploadedFile.filepath || uploadedFile.path;
     const fileName = uploadedFile.originalFilename || "audio.wav";
-
     const stats = fs.statSync(filePath);
     const size = stats.size;
 
@@ -45,16 +44,23 @@ export default async function handler(req, res) {
     const fileBuffer = await fs.promises.readFile(filePath);
     const base64Audio = fileBuffer.toString("base64");
 
-    console.log("📦 Encode xong, gửi lên Gemini...");
+    console.log("📦 Encode xong, chuẩn bị gửi lên Gemini...");
 
-    // ✅ Lấy key từ biến môi trường (đã cấu hình trong Vercel)
+    // ✅ Lấy API key từ biến môi trường Vercel
     const geminiApiKey = process.env.GEMINI_API_KEY;
 
     if (!geminiApiKey) {
-      return res.status(500).json({ error: "Thiếu GEMINI_API_KEY trong môi trường" });
+      console.error("❌ Không tìm thấy biến môi trường GEMINI_API_KEY");
+      return res.status(500).json({
+        error: "Thiếu GEMINI_API_KEY trong môi trường Vercel",
+      });
     }
 
-    const geminiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-robotics-er-1.5-preview:generateContent?key=${geminiApiKey}`;
+    const geminiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiApiKey}`;
+
+    // 🧩 Log kiểm tra API key và endpoint
+    console.log("🔑 API Key có tồn tại không:", geminiApiKey ? "✅ Có" : "❌ Không");
+    console.log("🌐 Endpoint đang dùng:", geminiEndpoint);
 
     const geminiPayload = {
       contents: [
@@ -74,7 +80,6 @@ export default async function handler(req, res) {
       ],
     };
 
-    // ✅ fetch có thể cần full URL encoding cho body
     const geminiResponse = await fetch(geminiEndpoint, {
       method: "POST",
       headers: {
