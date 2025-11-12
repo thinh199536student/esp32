@@ -1,9 +1,10 @@
 // api/upload.js
 import formidable from "formidable";
 import fs from "fs";
+import fetch from "node-fetch";
 
 export const config = {
-  api: { bodyParser: false }, // cần tắt bodyParser để nhận multipart/form-data
+  api: { bodyParser: false },
 };
 
 export default async function handler(req, res) {
@@ -12,44 +13,84 @@ export default async function handler(req, res) {
   }
 
   try {
-    // ⚙️ Khởi tạo formidable parser
+    // ⚙️ Parse multipart form
     const form = formidable({
       multiples: false,
       keepExtensions: true,
-      uploadDir: "/tmp", // nơi lưu file tạm trên Vercel
+      uploadDir: "/tmp",
     });
 
-    // ⚙️ Parse form-data
     const [fields, files] = await form.parse(req);
-
-    // ⚙️ Lấy file đầu tiên
     const file = files.file;
-    if (!file) {
-      return res.status(400).json({ error: "Không có file nào được tải lên" });
-    }
+    if (!file) return res.status(400).json({ error: "Không có file nào được tải lên" });
 
-    // ⚙️ Lấy thông tin file
     const uploadedFile = Array.isArray(file) ? file[0] : file;
     const filePath = uploadedFile.filepath || uploadedFile.path;
     const fileName = uploadedFile.originalFilename || "unknown.wav";
 
-    // ⚙️ Kiểm tra đúng tên file
     if (fileName !== "rec.wav") {
       return res.status(400).json({ error: "Sai tên file, cần là rec.wav" });
     }
 
-    // ⚙️ Kiểm tra dung lượng file thực
     const stats = fs.statSync(filePath);
     const size = stats.size;
-
     console.log("✅ Nhận file:", fileName, "size:", size, "bytes");
 
-    // ✅ Trả phản hồi thành công
+    // === 🔑 API KEY GEMINI (đặt trực tiếp trong code) ===
+    const GEMINI_API_KEY = "AIzaSyDQbbJiWNK_dBFV2GqinjBhckkVBjer6-8"; // <-- Thay bằng key thật của bạn
+
+    // === 📦 Encode file thành base64 ===
+    const audioBuffer = fs.readFileSync(filePath);
+    const base64Audio = audioBuffer.toString("base64");
+
+    // === 🌐 Gửi lên Gemini để chuyển thành văn bản ===
+    const GEMINI_URL =
+      "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
+
+    const body = {
+      contents: [
+        {
+          parts: [
+            {
+              text: "Hãy nhận dạng và phiên âm giọng nói tiếng Việt từ file âm thanh này.",
+            },
+            {
+              inlineData: {
+                mimeType: "audio/wav",
+                data: base64Audio,
+              },
+            },
+          ],
+        },
+      ],
+    };
+
+    const geminiResponse = await fetch(`${GEMINI_URL}?key=${GEMINI_API_KEY}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+
+    const geminiData = await geminiResponse.json();
+
+    if (!geminiResponse.ok) {
+      console.error("Gemini error:", geminiData);
+      return res.status(500).json({
+        error: "Gemini API error",
+        details: geminiData,
+      });
+    }
+
+    const transcription =
+      geminiData?.candidates?.[0]?.content?.parts?.[0]?.text ||
+      "(Không nhận được văn bản)";
+
+    // ✅ Trả về kết quả
     return res.status(200).json({
-      message: "✅ Đã nhận file rec.wav thành công!",
+      message: "✅ Đã nhận file rec.wav và gửi lên Gemini thành công!",
       filename: fileName,
       size,
-      savedTo: filePath,
+      text: transcription,
     });
   } catch (err) {
     console.error("🔥 Lỗi xử lý file:", err);
