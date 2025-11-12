@@ -47,7 +47,7 @@ export default async function handler(req, res) {
 
     console.log("📦 Encode xong, gửi lên Gemini...");
 
-    const geminiApiKey = "AIzaSyAx4yV9wwsBn84m5KONs4Lz5EV2oDjkoZI";
+    const geminiApiKey = "AIzaSyDQbbJiWNK_dBFV2GqinjBhckkVBjer6-8";
     const geminiEndpoint =
       "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=" +
       geminiApiKey;
@@ -103,3 +103,4 @@ export default async function handler(req, res) {
     });
   }
 }
+
