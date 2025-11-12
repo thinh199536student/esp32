@@ -109,7 +109,7 @@ export default async function handler(req, res) {
     const base64Data = fileBuffer.toString('base64');
 
     // Gửi sang Apps Script
-    const scriptUrl = 'https://script.google.com/macros/s/AKfycbxXXXXX/exec';
+    const scriptUrl = 'https://script.google.com/macros/s/AKfycbwmf6HNMKg00_Re1tzw15YokOZ8pyHTkHkPOhJ2XlZ6lPn_iYcNsA8LwRaQSmYNcUIM/exec';
     const response = await fetch(scriptUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -125,5 +125,6 @@ export default async function handler(req, res) {
     res.status(500).json({ error: error.message });
   }
 }
+
 
 
