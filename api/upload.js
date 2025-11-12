@@ -1,4 +1,3 @@
-// api/upload.js
 import formidable from "formidable";
 import fs from "fs";
 
@@ -33,6 +32,7 @@ export default async function handler(req, res) {
     const uploadedFile = Array.isArray(file) ? file[0] : file;
     const filePath = uploadedFile.filepath || uploadedFile.path;
     const fileName = uploadedFile.originalFilename || "audio.wav";
+
     const stats = fs.statSync(filePath);
     const size = stats.size;
 
@@ -47,15 +47,14 @@ export default async function handler(req, res) {
 
     console.log("📦 Encode xong, gửi lên Gemini...");
 
-    // ✅ Lấy API key từ biến môi trường Vercel
+    // ✅ Lấy key từ biến môi trường (đã cấu hình trong Vercel)
     const geminiApiKey = process.env.GEMINI_API_KEY;
+
     if (!geminiApiKey) {
-      throw new Error("Thiếu biến môi trường GEMINI_API_KEY trên Vercel");
+      return res.status(500).json({ error: "Thiếu GEMINI_API_KEY trong môi trường" });
     }
 
-    const geminiEndpoint =
-      "https://generativelanguage.googleapis.com/v1beta/models/gemini-robotics-er-1.5-preview:generateContent?key=" +
-      geminiApiKey;
+    const geminiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-robotics-er-1.5-preview:generateContent?key=${geminiApiKey}`;
 
     const geminiPayload = {
       contents: [
@@ -75,16 +74,19 @@ export default async function handler(req, res) {
       ],
     };
 
+    // ✅ fetch có thể cần full URL encoding cho body
     const geminiResponse = await fetch(geminiEndpoint, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+      },
       body: JSON.stringify(geminiPayload),
     });
 
     const text = await geminiResponse.text();
 
     if (!geminiResponse.ok) {
-      console.error("Gemini API lỗi:", geminiResponse.status, text);
+      console.error("❌ Gemini API lỗi:", geminiResponse.status, text);
       return res.status(500).json({
         error: "Gemini API lỗi",
         status: geminiResponse.status,
@@ -107,4 +109,3 @@ export default async function handler(req, res) {
     });
   }
 }
-
