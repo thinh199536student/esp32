@@ -1,10 +1,9 @@
 // api/upload.js
 import formidable from "formidable";
 import fs from "fs";
-import fetch from "node-fetch";
 
 export const config = {
-  api: { bodyParser: false },
+  api: { bodyParser: false }, // Tắt body parser mặc định để nhận file nhị phân
 };
 
 export default async function handler(req, res) {
@@ -13,7 +12,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Dùng Promise để đợi formidable xử lý xong
+    // === Bước 1: Parse form-data nhận từ ESP32 ===
     const { fields, files } = await new Promise((resolve, reject) => {
       const form = formidable({ multiples: false });
       form.parse(req, (err, fields, files) => {
@@ -22,54 +21,31 @@ export default async function handler(req, res) {
       });
     });
 
-    // Lấy file từ ESP32
+    // === Bước 2: Kiểm tra file ===
     const file = files.file?.[0] || files.file;
     if (!file) {
-      return res.status(400).json({ error: "no file uploaded" });
+      return res.status(400).json({ error: "Không tìm thấy file tải lên" });
     }
 
-    const fileData = fs.readFileSync(file.filepath);
-    console.log("✅ Received file:", file.originalFilename, "size:", file.size);
+    // === Bước 3: Kiểm tra đúng file rec.wav ===
+    const filename = file.originalFilename || "";
+    if (filename !== "rec.wav") {
+      return res.status(400).json({ error: "Tên file không hợp lệ, yêu cầu rec.wav" });
+    }
 
-    // === Gọi API Gemini ===
-    const GEMINI_API_KEY = "AIzaSyDQbbJiWNK_dBFV2GqinjBhckkVBjer6-8"; // <--- key của bạn ở đây
-    const base64Audio = fileData.toString("base64");
+    // === Bước 4: Lưu file tạm (tùy chọn, để debug) ===
+    const destPath = `/tmp/${filename}`;
+    fs.copyFileSync(file.filepath, destPath);
 
-    const geminiResponse = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-robotics-er-1.5-preview:generateContent?key=${GEMINI_API_KEY}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [
-            {
-              role: "user",
-              parts: [
-                { text: "Transcribe this Vietnamese audio to text:" },
-                {
-                  inline_data: {
-                    mime_type: "audio/wav",
-                    data: base64Audio,
-                  },
-                },
-              ],
-            },
-          ],
-          generationConfig: { maxOutputTokens: 200 },
-        }),
-      }
-    );
-
-    const geminiJson = await geminiResponse.json();
-    console.log("🧠 Gemini response:", geminiJson);
-
+    console.log("✅ Đã nhận file:", filename, "dung lượng:", file.size, "bytes");
     return res.status(200).json({
-      message: "✅ File received and sent to Gemini successfully!",
-      result: geminiJson,
+      message: "✅ Đã nhận file rec.wav thành công!",
+      filename,
+      size: file.size,
+      savedTo: destPath,
     });
   } catch (err) {
-    console.error("🔥 Server error:", err);
-    return res.status(500).json({ error: err.message });
+    console.error("🔥 Lỗi xử lý file:", err);
+    return res.status(500).json({ error: err.message || "Server error" });
   }
 }
-
