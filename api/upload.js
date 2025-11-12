@@ -1,9 +1,10 @@
 // api/upload.js
 import formidable from "formidable";
 import fs from "fs";
+import fetch from "node-fetch";
 
 export const config = {
-  api: { bodyParser: false }, // cần tắt bodyParser để nhận multipart/form-data
+  api: { bodyParser: false },
 };
 
 export default async function handler(req, res) {
@@ -44,6 +45,24 @@ export default async function handler(req, res) {
 
     console.log("✅ Nhận file:", fileName, "size:", size, "bytes");
 
+    // 📤 Đọc file và chuyển sang base64
+    const fileBuffer = fs.readFileSync(filePath);
+    const base64Data = fileBuffer.toString("base64");
+
+    // 🚀 Gửi dữ liệu lên Apps Script
+    const scriptUrl = "https://script.google.com/macros/s/AKfycbxXXXXX/exec"; // Thay bằng URL thật
+    const response = await fetch(scriptUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        audio: base64Data,
+        mimeType: "audio/wav",
+        filename: fileName,
+      }),
+    });
+
+    const result = await response.json();
+
     // ✅ Trả phản hồi thành công
     return res.status(200).json({
       message: "✅ Đã nhận file rec.wav thành công!",
@@ -58,3 +77,4 @@ export default async function handler(req, res) {
     });
   }
 }
+
