@@ -3,7 +3,7 @@ import fs from "fs";
 import fetch from "node-fetch";
 
 export const config = {
-  api: { bodyParser: false }, // cần tắt bodyParser để xử lý multipart/form-data
+  api: { bodyParser: false },
 };
 
 export default async function handler(req, res) {
@@ -12,15 +12,19 @@ export default async function handler(req, res) {
   }
 
   try {
-    // ⚙️ Khởi tạo parser
     const form = formidable({
       multiples: false,
       keepExtensions: true,
-      uploadDir: "/tmp", // thư mục tạm trên Vercel
+      uploadDir: "/tmp",
     });
 
-    // ⚙️ Phân tích form
-    const [fields, files] = await form.parse(req);
+    // ✅ Cách parse đúng (chuyển callback -> Promise)
+    const { fields, files } = await new Promise((resolve, reject) => {
+      form.parse(req, (err, fields, files) => {
+        if (err) reject(err);
+        else resolve({ fields, files });
+      });
+    });
 
     const file = files.file;
     if (!file) {
@@ -40,9 +44,11 @@ export default async function handler(req, res) {
     const fileBuffer = fs.readFileSync(filePath);
     const base64Audio = fileBuffer.toString("base64");
 
-    // 🚀 Gửi lên Gemini API (Google AI Studio)
+    // 🚀 Gửi lên Gemini API
     const geminiApiKey = "AIzaSyAx4yV9wwsBn84m5KONs4Lz5EV2oDjkoZI";
-    const geminiEndpoint = "https://generativelanguage.googleapis.com/v1beta/models/gemini-robotics-er-1.5-preview:generateContent?key=" + geminiApiKey;
+    const geminiEndpoint =
+      "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=" +
+      geminiApiKey;
 
     const geminiPayload = {
       contents: [
@@ -54,9 +60,7 @@ export default async function handler(req, res) {
                 data: base64Audio,
               },
             },
-            {
-              text: "Hãy phân tích nội dung của đoạn ghi âm này và trả lời bằng tiếng Việt.",
-            },
+            { text: "Hãy chuyển đoạn ghi âm tiếng Việt này thành văn bản." },
           ],
         },
       ],
@@ -68,9 +72,19 @@ export default async function handler(req, res) {
       body: JSON.stringify(geminiPayload),
     });
 
+    if (!geminiResponse.ok) {
+      const errorText = await geminiResponse.text();
+      console.error("❌ Gemini error:", errorText);
+      return res.status(500).json({
+        error: "Gemini API error",
+        status: geminiResponse.status,
+        details: errorText,
+      });
+    }
+
     const geminiResult = await geminiResponse.json();
 
-    // ✅ Trả kết quả về client
+    // ✅ Trả kết quả
     return res.status(200).json({
       message: "✅ Đã gửi file lên Gemini thành công!",
       filename: fileName,
