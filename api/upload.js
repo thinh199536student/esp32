@@ -54,7 +54,7 @@ export default async function handler(req, res) {
     }
 
     const geminiEndpoint =
-      "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=" +
+      "https://generativelanguage.googleapis.com/v1beta/models/gemini-robotics-er-1.5-preview:generateContent?key=" +
       geminiApiKey;
 
     const geminiPayload = {
@@ -107,3 +107,4 @@ export default async function handler(req, res) {
     });
   }
 }
+
