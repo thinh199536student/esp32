@@ -47,7 +47,12 @@ export default async function handler(req, res) {
 
     console.log("📦 Encode xong, gửi lên Gemini...");
 
-    const geminiApiKey = "AIzaSyDQbbJiWNK_dBFV2GqinjBhckkVBjer6-8";
+    // ✅ Lấy API key từ biến môi trường Vercel
+    const geminiApiKey = process.env.GEMINI_API_KEY;
+    if (!geminiApiKey) {
+      throw new Error("Thiếu biến môi trường GEMINI_API_KEY trên Vercel");
+    }
+
     const geminiEndpoint =
       "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=" +
       geminiApiKey;
@@ -70,7 +75,6 @@ export default async function handler(req, res) {
       ],
     };
 
-    // ⚠️ Dùng fetch mặc định của môi trường Node/Vercel
     const geminiResponse = await fetch(geminiEndpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -103,4 +107,3 @@ export default async function handler(req, res) {
     });
   }
 }
-
