@@ -1,26 +1,60 @@
-import formidable from 'formidable';
+// api/upload.js
+import formidable from "formidable";
+import fs from "fs";
 
 export const config = {
-  api: { bodyParser: false },
+  api: { bodyParser: false }, // cần tắt bodyParser để nhận multipart/form-data
 };
 
 export default async function handler(req, res) {
-  const form = new formidable.IncomingForm();
-  form.parse(req, async (err, fields, files) => {
-    if (err) return res.status(500).json({ error: err.message });
-    
-    const filePath = files.audio[0].filepath;
-    const fileBuffer = fs.readFileSync(filePath);
-    const base64Data = fileBuffer.toString('base64');
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "Only POST allowed" });
+  }
 
-    // Gửi sang Apps Script
-    const response = await fetch('https://script.google.com/macros/library/d/16SZA-1AAYnbGVUimvIG2DaavRRaKH0gAYzqzFoI4ySDJTOLDFdBgbMzT/3', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ audio: base64Data, mimeType: 'audio/wav' }),
+  try {
+    // ⚙️ Khởi tạo formidable parser
+    const form = formidable({
+      multiples: false,
+      keepExtensions: true,
+      uploadDir: "/tmp", // nơi lưu file tạm trên Vercel
     });
 
-    const result = await response.json();
-    res.status(200).json(result);
-  });
+    // ⚙️ Parse form-data
+    const [fields, files] = await form.parse(req);
+
+    // ⚙️ Lấy file đầu tiên
+    const file = files.file;
+    if (!file) {
+      return res.status(400).json({ error: "Không có file nào được tải lên" });
+    }
+
+    // ⚙️ Lấy thông tin file
+    const uploadedFile = Array.isArray(file) ? file[0] : file;
+    const filePath = uploadedFile.filepath || uploadedFile.path;
+    const fileName = uploadedFile.originalFilename || "unknown.wav";
+
+    // ⚙️ Kiểm tra đúng tên file
+    if (fileName !== "rec.wav") {
+      return res.status(400).json({ error: "Sai tên file, cần là rec.wav" });
+    }
+
+    // ⚙️ Kiểm tra dung lượng file thực
+    const stats = fs.statSync(filePath);
+    const size = stats.size;
+
+    console.log("✅ Nhận file:", fileName, "size:", size, "bytes");
+
+    // ✅ Trả phản hồi thành công
+    return res.status(200).json({
+      message: "✅ Đã nhận file rec.wav thành công!",
+      filename: fileName,
+      size,
+      savedTo: filePath,
+    });
+  } catch (err) {
+    console.error("🔥 Lỗi xử lý file:", err);
+    return res.status(500).json({
+      error: err.message || "Lỗi server khi xử lý file.",
+    });
+  }
 }
