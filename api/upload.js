@@ -50,7 +50,7 @@ export default async function handler(req, res) {
     const base64Data = fileBuffer.toString("base64");
 
     // 🚀 Gửi dữ liệu lên Apps Script
-    const scriptUrl = "https://script.google.com/macros/s/AKfycbxXXXXX/exec"; // Thay bằng URL thật
+    const scriptUrl = "https://script.google.com/macros/library/d/16SZA-1AAYnbGVUimvIG2DaavRRaKH0gAYzqzFoI4ySDJTOLDFdBgbMzT/3"; // Thay bằng URL thật
     const response = await fetch(scriptUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -77,4 +77,5 @@ export default async function handler(req, res) {
     });
   }
 }
+
 
