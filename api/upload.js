@@ -1,43 +1,42 @@
-import multer from "multer";
-import nextConnect from "next-connect";
-
-const upload = multer({ storage: multer.memoryStorage() });
-
-const apiRoute = nextConnect({
-  onError(error, req, res) {
-    console.error("❌ Lỗi upload:", error);
-    res.status(500).json({ error: `Upload failed: ${error.message}` });
-  },
-  onNoMatch(req, res) {
-    res.status(405).json({ error: `Method '${req.method}' Not Allowed` });
-  },
-});
-
-apiRoute.use(upload.single("file"));
-
-apiRoute.post(async (req, res) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({ error: "Không có file nào được upload!" });
-    }
-
-    console.log("📦 Nhận file:", req.file.originalname, req.file.mimetype, req.file.size);
-
-    res.status(200).json({
-      message: "✅ Đã nhận file thành công!",
-      filename: req.file.originalname,
-      size: req.file.size,
-    });
-  } catch (err) {
-    console.error("❌ Lỗi khi xử lý:", err);
-    res.status(500).json({ error: err.message });
-  }
-});
+// api/upload.js
+import formidable from "formidable";
+import fs from "fs";
 
 export const config = {
-  api: {
-    bodyParser: false, // quan trọng: tắt parser mặc định để multer hoạt động
-  },
+  api: { bodyParser: false },
 };
 
-export default apiRoute;
+export default async function handler(req, res) {
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "Only POST allowed" });
+  }
+
+  const form = formidable({ multiples: false });
+
+  form.parse(req, async (err, fields, files) => {
+    if (err) {
+      console.error("❌ Formidable error:", err);
+      return res.status(500).json({ error: "Formidable parse error" });
+    }
+
+    try {
+      const file = files.file?.[0] || files.file;
+      if (!file) {
+        return res.status(400).json({ error: "no file uploaded" });
+      }
+
+      const fileData = fs.readFileSync(file.filepath);
+      console.log("✅ Received file:", file.originalFilename, "size:", file.size);
+
+      // ---- test output ----
+      return res.status(200).json({
+        message: "✅ Đã nhận file thành công!",
+        filename: file.originalFilename,
+        size: file.size,
+      });
+    } catch (e) {
+      console.error("🔥 Error processing file:", e);
+      return res.status(500).json({ error: e.message });
+    }
+  });
+}
