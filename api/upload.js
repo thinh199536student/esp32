@@ -1,10 +1,9 @@
-// api/upload.js
 import formidable from "formidable";
 import fs from "fs";
 import fetch from "node-fetch";
 
 export const config = {
-  api: { bodyParser: false },
+  api: { bodyParser: false }, // cần tắt bodyParser để xử lý multipart/form-data
 };
 
 export default async function handler(req, res) {
@@ -13,74 +12,73 @@ export default async function handler(req, res) {
   }
 
   try {
-    // ⚙️ Khởi tạo formidable parser
+    // ⚙️ Khởi tạo parser
     const form = formidable({
       multiples: false,
       keepExtensions: true,
       uploadDir: "/tmp", // thư mục tạm trên Vercel
     });
 
-    // ⚙️ Parse form-data (trả về Promise)
+    // ⚙️ Phân tích form
     const [fields, files] = await form.parse(req);
 
-    // ⚙️ Lấy file đầu tiên
     const file = files.file;
     if (!file) {
       return res.status(400).json({ error: "Không có file nào được tải lên" });
     }
 
-    // ⚙️ Lấy thông tin file
     const uploadedFile = Array.isArray(file) ? file[0] : file;
     const filePath = uploadedFile.filepath || uploadedFile.path;
-    const fileName = uploadedFile.originalFilename || "unknown.wav";
+    const fileName = uploadedFile.originalFilename || "audio.wav";
 
-    // ✅ Không bắt buộc phải đúng tên “rec.wav” (nếu bạn chỉ cần upload file)
-    // Nếu bạn muốn giới hạn, có thể bật dòng sau:
-    // if (fileName !== "rec.wav") return res.status(400).json({ error: "Sai tên file, cần là rec.wav" });
-
-    // ⚙️ Kiểm tra dung lượng file
     const stats = fs.statSync(filePath);
     const size = stats.size;
 
     console.log("✅ Nhận file:", fileName, "size:", size, "bytes");
 
-    // 📤 Đọc file và chuyển sang base64
+    // 📤 Đọc file và mã hóa base64
     const fileBuffer = fs.readFileSync(filePath);
-    const base64Data = fileBuffer.toString("base64");
+    const base64Audio = fileBuffer.toString("base64");
 
-    // 🚀 Gửi dữ liệu lên Google Apps Script (phải là URL /exec)
-    const scriptUrl = "https://script.google.com/macros/s/AKfycbxYourScriptID/exec"; // <-- Thay đúng URL deploy Web App
+    // 🚀 Gửi lên Gemini API (Google AI Studio)
+    const geminiApiKey = "AIzaSyAx4yV9wwsBn84m5KONs4Lz5EV2oDjkoZI";
+    const geminiEndpoint = "https://generativelanguage.googleapis.com/v1beta/models/gemini-robotics-er-1.5-preview:generateContent?key=" + geminiApiKey;
 
-    const response = await fetch(scriptUrl, {
+    const geminiPayload = {
+      contents: [
+        {
+          parts: [
+            {
+              inlineData: {
+                mimeType: "audio/wav",
+                data: base64Audio,
+              },
+            },
+            {
+              text: "Hãy phân tích nội dung của đoạn ghi âm này và trả lời bằng tiếng Việt.",
+            },
+          ],
+        },
+      ],
+    };
+
+    const geminiResponse = await fetch(geminiEndpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        audio: base64Data,
-        mimeType: "audio/wav",
-        filename: fileName,
-      }),
+      body: JSON.stringify(geminiPayload),
     });
 
-    // 📥 Đọc kết quả từ Apps Script
-    const text = await response.text();
-    let result;
-    try {
-      result = JSON.parse(text);
-    } catch {
-      result = { raw: text };
-    }
+    const geminiResult = await geminiResponse.json();
 
-    // ✅ Trả phản hồi thành công
+    // ✅ Trả kết quả về client
     return res.status(200).json({
-      message: "✅ Đã nhận và gửi file lên Apps Script thành công!",
+      message: "✅ Đã gửi file lên Gemini thành công!",
       filename: fileName,
       size,
-      scriptResponse: result,
+      geminiReply: geminiResult,
     });
   } catch (err) {
-    console.error("🔥 Lỗi xử lý file:", err);
-    return res.status(500).json({
-      error: err.message || "Lỗi server khi xử lý file.",
-    });
+    console.error("🔥 Lỗi xử lý:", err);
+    return res.status(500).json({ error: err.message || "Lỗi server." });
   }
 }
