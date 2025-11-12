@@ -4,7 +4,7 @@ import path from 'path';
 export default async function handler(req, res) {
   try {
     // Đường dẫn đến file WAV trên Vercel
-    const filePath = path.join(process.cwd(), 'public', 'voice.wav');
+    const filePath = path.join(process.cwd(), 'public', 'rec.wav');
     const fileBuffer = fs.readFileSync(filePath);
     const base64Data = fileBuffer.toString('base64');
 
@@ -25,4 +25,5 @@ export default async function handler(req, res) {
     res.status(500).json({ error: error.message });
   }
 }
+
 
