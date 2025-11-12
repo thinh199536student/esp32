@@ -44,23 +44,20 @@ export default async function handler(req, res) {
     const fileBuffer = await fs.promises.readFile(filePath);
     const base64Audio = fileBuffer.toString("base64");
 
-    console.log("📦 Encode xong, chuẩn bị gửi lên Gemini...");
+    console.log("📦 Encode xong, gửi lên Gemini...");
 
-    // ✅ Lấy API key từ biến môi trường Vercel
+    // ✅ Lấy API key từ biến môi trường
     const geminiApiKey = process.env.GEMINI_API_KEY;
-
     if (!geminiApiKey) {
       console.error("❌ Không tìm thấy biến môi trường GEMINI_API_KEY");
       return res.status(500).json({
-        error: "Thiếu GEMINI_API_KEY trong môi trường Vercel",
+        error: "Thiếu GEMINI_API_KEY trong môi trường",
       });
     }
 
-    const geminiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiApiKey}`;
-
-    // 🧩 Log kiểm tra API key và endpoint
-    console.log("🔑 API Key có tồn tại không:", geminiApiKey ? "✅ Có" : "❌ Không");
-    console.log("🌐 Endpoint đang dùng:", geminiEndpoint);
+    const geminiEndpoint =
+      "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=" +
+      geminiApiKey;
 
     const geminiPayload = {
       contents: [
@@ -82,16 +79,14 @@ export default async function handler(req, res) {
 
     const geminiResponse = await fetch(geminiEndpoint, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(geminiPayload),
     });
 
     const text = await geminiResponse.text();
 
     if (!geminiResponse.ok) {
-      console.error("❌ Gemini API lỗi:", geminiResponse.status, text);
+      console.error("Gemini API lỗi:", geminiResponse.status, text);
       return res.status(500).json({
         error: "Gemini API lỗi",
         status: geminiResponse.status,
