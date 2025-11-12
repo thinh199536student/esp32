@@ -7,12 +7,16 @@ export const config = {
   api: { bodyParser: false },
 };
 
+// === Gemini API key ===
+const GEMINI_API_KEY = "AIzaSyAx4yV9wwsBn84m5KONs4Lz5EV2oDjkoZI"; // 🔁 thay bằng key thật của bạn
+const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`;
+
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Only POST allowed" });
   }
 
-  const form = formidable({ multiples: false });
+  const form = formidable({ multiples: false, uploadDir: "/tmp", keepExtensions: true });
 
   form.parse(req, async (err, fields, files) => {
     if (err) {
@@ -22,44 +26,43 @@ export default async function handler(req, res) {
 
     try {
       const file = files.file?.[0] || files.file;
-      if (!file) {
-        return res.status(400).json({ error: "no file uploaded" });
-      }
+      if (!file) return res.status(400).json({ error: "No file uploaded" });
 
-      const fileData = fs.readFileSync(file.filepath);
       console.log("✅ Received file:", file.originalFilename, "size:", file.size);
 
-      // ---- test output ----
-      return res.status(200).json({
-        message: "✅ Đã nhận file thành công!",
-        filename: file.originalFilename,
-        size: file.size,
+      // === Đọc & encode Base64 ===
+      const fileData = fs.readFileSync(file.filepath).toString("base64");
+
+      // === Gửi đến Gemini ===
+      const geminiRes = await fetch(GEMINI_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [
+            {
+              role: "user",
+              parts: [
+                { text: "Hãy chuyển âm thanh tiếng Việt này thành văn bản, không tóm tắt:" },
+                { inline_data: { mime_type: "audio/wav", data: fileData } }
+              ]
+            }
+          ],
+          generationConfig: { maxOutputTokens: 400 }
+        }),
       });
+
+      const geminiJson = await geminiRes.json();
+      console.log("🎯 Gemini response:", geminiJson);
+
+      // === Trả kết quả về cho ESP32 ===
+      res.status(200).json({
+        success: true,
+        transcription: geminiJson?.candidates?.[0]?.content?.parts?.[0]?.text || "(Không có kết quả)",
+      });
+
     } catch (e) {
-      console.error("🔥 Error processing file:", e);
-      return res.status(500).json({ error: e.message });
+      console.error("🔥 Error:", e);
+      res.status(500).json({ error: e.message });
     }
   });
 }
-
-const fileData = fs.readFileSync("/tmp/rec.wav").toString("base64");
-const res = await fetch(
-  "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=YOUR_API_KEY",
-  {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      contents: [
-        {
-          role: "user",
-          parts: [
-            { text: "Transcribe the following Vietnamese audio:" },
-            { inline_data: { mime_type: "audio/wav", data: fileData } }
-          ]
-        }
-      ],
-      generationConfig: { maxOutputTokens: 200 }
-    }),
-  }
-);
-console.log(await res.json());
