@@ -8,8 +8,8 @@ export const config = {
 };
 
 // === Gemini API key ===
-const GEMINI_API_KEY = "AIzaSyAx4yV9wwsBn84m5KONs4Lz5EV2oDjkoZI"; // 🔁 thay bằng key thật của bạn
-const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`;
+const GEMINI_API_KEY = "AIzaSyDQbbJiWNK_dBFV2GqinjBhckkVBjer6-8"; // 🔁 thay bằng key thật của bạn
+const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-robotics-er-1.5-preview:generateContent?key=${GEMINI_API_KEY}`;
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
@@ -66,3 +66,4 @@ export default async function handler(req, res) {
     }
   });
 }
+
