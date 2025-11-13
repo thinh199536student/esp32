@@ -31,7 +31,7 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: "Missing GEMINI_API_KEY" });
     }
 
-    const url = `https://texttospeech.googleapis.com/v1/text:synthesize?key=${apiKey}`;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
     const body = {
       input: { text },
       voice: { languageCode: "vi-VN", name: "vi-VN-Wavenet-A" },
@@ -60,3 +60,4 @@ export default async function handler(req, res) {
     res.status(500).json({ error: err.message });
   }
 }
+
