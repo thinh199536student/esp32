@@ -70,7 +70,7 @@ export default async function handler(req, res) {
               },
             },
             {
-              text: "đây là audio của môt ngôn ngữ nào đó hãy trả lời câu hỏi của file rec.wav bằng tiếng Việt.",
+              text: "đây là giọng nói tiếng Anh hãy trả lời câu hỏi của file rec.wav bằng tiếng Việt.",
             },
           ],
         },
@@ -109,5 +109,6 @@ export default async function handler(req, res) {
     });
   }
 }
+
 
 
