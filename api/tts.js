@@ -1,51 +1,60 @@
 // /api/tts.js
+export const config = {
+  api: {
+    bodyParser: false, // tắt bodyParser mặc định của Vercel
+  },
+};
+
 export default async function handler(req, res) {
   try {
-    // Đọc text từ ESP32 gửi lên
-    const { text } = req.body || {};
+    // Đọc dữ liệu thô từ request
+    const buffers = [];
+    for await (const chunk of req) {
+      buffers.push(chunk);
+    }
+    const rawBody = Buffer.concat(buffers).toString();
+    let data = {};
+    try {
+      data = JSON.parse(rawBody);
+    } catch (err) {
+      console.error("❌ Invalid JSON:", rawBody);
+      return res.status(400).json({ error: "Invalid JSON" });
+    }
+
+    const { text } = data;
     if (!text) {
       return res.status(400).json({ error: "Missing text" });
     }
 
-    // Lấy Google API key (dùng chung với Gemini)
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
-      return res.status(500).json({ error: "Missing GEMINI_API_KEY in environment" });
+      return res.status(500).json({ error: "Missing GEMINI_API_KEY" });
     }
 
-    // Endpoint Google Text-to-Speech
     const url = `https://texttospeech.googleapis.com/v1/text:synthesize?key=${apiKey}`;
-
-    // Cấu hình yêu cầu
     const body = {
       input: { text },
       voice: { languageCode: "vi-VN", name: "vi-VN-Wavenet-A" },
       audioConfig: {
-        audioEncoding: "LINEAR16",      // ESP32 hiểu định dạng này
-        sampleRateHertz: 16000          // khớp với SAMPLE_RATE trên ESP32
-      }
+        audioEncoding: "LINEAR16",
+        sampleRateHertz: 16000,
+      },
     };
 
-    // Gửi yêu cầu đến Google TTS
     const ttsResp = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body)
+      body: JSON.stringify(body),
     });
 
-    const data = await ttsResp.json();
+    const json = await ttsResp.json();
 
-    // Kiểm tra phản hồi từ Google
-    if (!data.audioContent) {
-      console.error("Google TTS error:", data);
-      return res.status(500).json({
-        error: "Google TTS did not return audioContent",
-        details: data,
-      });
+    if (!json.audioContent) {
+      console.error("Google TTS error:", json);
+      return res.status(500).json({ error: "No audioContent", details: json });
     }
 
-    // Trả dữ liệu base64 lại cho ESP32
-    res.status(200).json({ audioContent: data.audioContent });
+    res.status(200).json({ audioContent: json.audioContent });
   } catch (err) {
     console.error("Vercel /api/tts error:", err);
     res.status(500).json({ error: err.message });
