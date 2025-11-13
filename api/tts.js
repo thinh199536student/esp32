@@ -1,7 +1,7 @@
 // /api/tts.js
 export const config = {
   api: {
-    bodyParser: false, // tắt bodyParser mặc định của Vercel để ESP32 gửi JSON thô
+    bodyParser: true, // bật lại parser JSON mặc định của Vercel
   },
 };
 
@@ -11,37 +11,24 @@ export default async function handler(req, res) {
   }
 
   try {
-    // === Đọc dữ liệu thô từ ESP32 ===
-    let rawBody = "";
-    for await (const chunk of req) {
-      rawBody += chunk;
+    const { text } = req.body;
+
+    if (!text || typeof text !== "string") {
+      return res.status(400).json({ error: "Missing or invalid 'text'" });
     }
 
-    console.log("📥 Raw body:", rawBody);
+    console.log("📥 Nhận text:", text);
 
-    let data;
-    try {
-      data = JSON.parse(rawBody);
-    } catch (err) {
-      console.error("❌ JSON parse error:", err);
-      return res.status(400).json({ error: "Invalid JSON", body: rawBody });
-    }
-
-    const text = data.text?.trim();
-    if (!text) {
-      return res.status(400).json({ error: "Missing text" });
-    }
-
-    // === Dùng cùng API key với Gemini ===
+    // === Dùng chung GEMINI_API_KEY ===
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
-      console.error("❌ Không tìm thấy GEMINI_API_KEY");
+      console.error("❌ Thiếu GEMINI_API_KEY");
       return res.status(500).json({ error: "Missing GEMINI_API_KEY" });
     }
 
-    // === Gọi Google Cloud Text-to-Speech ===
+    // === Gọi Google TTS API ===
     const ttsUrl = `https://texttospeech.googleapis.com/v1/text:synthesize?key=${apiKey}`;
-    const body = {
+    const payload = {
       input: { text },
       voice: { languageCode: "vi-VN", name: "vi-VN-Wavenet-A" },
       audioConfig: {
@@ -50,25 +37,28 @@ export default async function handler(req, res) {
       },
     };
 
-    const ttsResp = await fetch(ttsUrl, {
+    const response = await fetch(ttsUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
+      body: JSON.stringify(payload),
     });
 
-    const json = await ttsResp.json();
+    const json = await response.json();
 
-    if (!ttsResp.ok || !json.audioContent) {
-      console.error("❌ TTS API error:", json);
-      return res.status(500).json({ error: "TTS API error", details: json });
+    if (!response.ok || !json.audioContent) {
+      console.error("❌ Lỗi từ Google TTS:", json);
+      return res.status(500).json({
+        error: "TTS API error",
+        details: json,
+      });
     }
 
-    // ✅ Trả về dữ liệu âm thanh base64 cho ESP32
-    res.status(200).json({
+    // ✅ Trả về audio base64 cho ESP32
+    return res.status(200).json({
       audioContent: json.audioContent,
     });
   } catch (err) {
-    console.error("🔥 Handler error:", err);
-    res.status(500).json({ error: err.message });
+    console.error("🔥 Lỗi handler:", err);
+    return res.status(500).json({ error: err.message });
   }
 }
