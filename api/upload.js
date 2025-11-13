@@ -95,6 +95,36 @@ export default async function handler(req, res) {
     }
 
     const geminiResult = JSON.parse(text);
+    
+    // ✅ Lấy text trả lời từ Gemini
+    const geminiText =
+      geminiResult?.candidates?.[0]?.content?.parts?.[0]?.text || "Không có phản hồi.";
+    
+    // === Thêm phần tạo âm thanh trả lời ===
+    console.log("🔊 Tạo giọng nói từ text...");
+    
+    const ttsEndpoint =
+      "https://texttospeech.googleapis.com/v1/text:synthesize?key=" + geminiApiKey;
+    
+    const ttsPayload = {
+      input: { text: geminiText },
+      voice: { languageCode: "vi-VN", name: "vi-VN-Wavenet-A" },
+      audioConfig: { audioEncoding: "LINEAR16" },
+    };
+    
+    const ttsResponse = await fetch(ttsEndpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(ttsPayload),
+    });
+    
+    const ttsText = await ttsResponse.text();
+    if (!ttsResponse.ok) {
+      console.error("TTS lỗi:", ttsResponse.status, ttsText);
+    } else {
+      const ttsResult = JSON.parse(ttsText);
+      geminiResult.audioContent = ttsResult.audioContent; // 🎯 thêm base64 audio vào phản hồi
+    }
 
     return res.status(200).json({
       message: "✅ Gửi file lên Gemini thành công!",
@@ -109,6 +139,7 @@ export default async function handler(req, res) {
     });
   }
 }
+
 
 
 
