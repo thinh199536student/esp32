@@ -1,4 +1,3 @@
-// /api/tts.js
 export const config = {
   api: {
     bodyParser: true, // bật lại parser JSON mặc định của Vercel
@@ -19,11 +18,11 @@ export default async function handler(req, res) {
 
     console.log("📥 Nhận text:", text);
 
-    // === Dùng chung GEMINI_API_KEY ===
-    const apiKey = process.env.GEMINI_API_KEY;
+    // === support both GEMINI_API_KEY và GOOGLE_API_KEY ===
+    const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
     if (!apiKey) {
-      console.error("❌ Thiếu GEMINI_API_KEY");
-      return res.status(500).json({ error: "Missing GEMINI_API_KEY" });
+      console.error("❌ Thiếu API key (GEMINI_API_KEY or GOOGLE_API_KEY)");
+      return res.status(500).json({ error: "Missing API key" });
     }
 
     // === Gọi Google TTS API ===
@@ -43,12 +42,33 @@ export default async function handler(req, res) {
       body: JSON.stringify(payload),
     });
 
-    const json = await response.json();
-
-    if (!response.ok || !json.audioContent) {
-      console.error("❌ Lỗi từ Google TTS:", json);
+    // đọc raw text để debug nếu response không phải JSON
+    const respText = await response.text();
+    let json;
+    try {
+      json = JSON.parse(respText);
+    } catch (parseErr) {
+      console.error("❌ Không parse được JSON từ Google TTS. HTTP status:", response.status);
+      console.error("❌ Response body:", respText);
       return res.status(500).json({
+        error: "Invalid JSON from Google TTS",
+        status: response.status,
+        body: respText,
+      });
+    }
+
+    if (!response.ok) {
+      console.error("❌ Lỗi từ Google TTS:", json);
+      return res.status(response.status).json({
         error: "TTS API error",
+        details: json,
+      });
+    }
+
+    if (!json.audioContent) {
+      console.error("❌ Không có audioContent trong phản hồi Google TTS:", json);
+      return res.status(500).json({
+        error: "Missing audioContent in TTS response",
         details: json,
       });
     }
@@ -62,3 +82,4 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: err.message });
   }
 }
+// ...existing code...
