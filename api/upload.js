@@ -70,7 +70,7 @@ export default async function handler(req, res) {
               },
             },
             {
-              text: "Hãy chuyển toàn bộ nội dung âm thanh này thành văn bản tiếng Việt.",
+              text: "Hãy trả lời nội dung âm thanh này thành văn bản tiếng Việt.",
             },
           ],
         },
@@ -109,6 +109,7 @@ export default async function handler(req, res) {
     });
   }
 }
+
 
 
 
