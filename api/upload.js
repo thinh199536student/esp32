@@ -70,7 +70,7 @@ export default async function handler(req, res) {
               },
             },
             {
-              text: "Hãy trả lời nội dung âm thanh này thành văn bản tiếng Việt.",
+              text: "Đây là một câu hỏi bằng giọng nói. Hãy nghe file ghi âm, hiểu nội dung người nói và trả lời lại bằng tiếng Việt một cách tự nhiên, ngắn gọn và rõ ràng.",
             },
           ],
         },
@@ -109,6 +109,7 @@ export default async function handler(req, res) {
     });
   }
 }
+
 
 
 
