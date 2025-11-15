@@ -1,23 +1,38 @@
-import OpenAI from "openai";
+import { exec } from "child_process";
+import { promisify } from "util";
+const run = promisify(exec);
+
+export const config = {
+  runtime: "nodejs20.x"
+};
 
 export default async function handler(req, res) {
-  const { text } = await req.json();
+  try {
+    const { text } = await req.body
+      ? Promise.resolve(req.body)
+      : new Promise(resolve => {
+          let body = "";
+          req.on("data", chunk => (body += chunk));
+          req.on("end", () => resolve(JSON.parse(body)));
+        });
 
-  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    if (!text) return res.status(400).json({ error: "Text missing" });
 
-  const response = await openai.audio.speech.create({
-    model: "gpt-4o-mini-tts",
-    input: text,
-    voice: "alloy",
-    format: "pcm",      // LINEAR16
-    sample_rate: 16000
-  });
+    // Lệnh Edge TTS → xuất ra WAV LINEAR16 16kHz
+    const cmd = `edge-tts --text "${text}" --voice vi-VN-HoaiMyNeural --rate=0% --volume=0% --format audio-16khz-16bit-mono-pcm --write-media output.wav`;
 
-  const audioBase64 = Buffer.from(await response.arrayBuffer()).toString("base64");
+    await run(cmd);
 
-  res.status(200).json({
-    audioContent: audioBase64,
-    format: "pcm16",
-    sampleRate: 16000
-  });
+    const fs = await import("fs");
+    const audio = fs.readFileSync("output.wav");
+    const base64 = audio.toString("base64");
+
+    res.status(200).json({
+      audioContent: base64,
+      sampleRate: 16000,
+      encoding: "LINEAR16"
+    });
+  } catch (e) {
+    res.status(500).json({ error: "EdgeTTS error", details: String(e) });
+  }
 }
