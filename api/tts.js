@@ -16,74 +16,66 @@ export default async function handler(req) {
     const apiKey = process.env.GOOGLE_API_KEY;
     if (!apiKey) {
       return new Response(JSON.stringify({ error: "Missing GOOGLE_API_KEY" }), {
-        status: 500
+        status: 500,
+        headers: { "Content-Type": "application/json" }
       });
     }
 
-    // Gửi yêu cầu TTS đến Gemini
-    const geminiResponse = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-robotics-er-1.5-preview:generateContent?key=${apiKey}`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
+    // Gọi Google Cloud Text-to-Speech API (KHÔNG phải Gemini)
+    const ttsUrl = `https://texttospeech.googleapis.com/v1/text:synthesize?key=${apiKey}`;
+    
+    const ttsResponse = await fetch(ttsUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        input: { text: text },
+        voice: {
+          languageCode: "vi-VN",
+          name: "vi-VN-Wavenet-A"  // Giọng tiếng Việt
         },
-        body: JSON.stringify({
-          contents: [
-            {
-              parts: [
-                {
-                  text: `
-Hãy tạo file âm thanh WAV (LINEAR16, 16000Hz, MONO) cho đoạn văn sau:
+        audioConfig: {
+          audioEncoding: "LINEAR16",  // PCM 16-bit
+          sampleRateHertz: 16000
+        }
+      })
+    });
 
-${text}
-                  `
-                }
-              ]
-            }
-          ],
-          generationConfig: {
-            responseMimeType: "audio/wav",
-            responseAudioConfig: {
-              audioEncoding: "LINEAR16",
-              sampleRateHertz: 16000
-            }
-          }
-        })
-      }
-    );
+    const ttsJson = await ttsResponse.json();
 
-    const json = await geminiResponse.json();
-
-    // Kiểm tra lỗi
-    if (!geminiResponse.ok) {
+    if (!ttsResponse.ok) {
       return new Response(
         JSON.stringify({
-          error: "Gemini request failed",
-          details: json
+          error: "Google TTS API failed",
+          details: ttsJson
         }),
-        { status: 500 }
+        { 
+          status: ttsResponse.status,
+          headers: { "Content-Type": "application/json" }
+        }
       );
     }
 
-    // Lấy audio base64
-    const audio =
-      json.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-
-    if (!audio) {
+    // Lấy audio base64 từ response
+    const audioContent = ttsJson.audioContent;
+    if (!audioContent) {
       return new Response(
         JSON.stringify({
-          error: "No audio returned from Gemini",
-          raw: json
+          error: "No audioContent in TTS response",
+          raw: ttsJson
         }),
-        { status: 500 }
+        { 
+          status: 500,
+          headers: { "Content-Type": "application/json" }
+        }
       );
     }
 
-    // Trả kết quả về ESP32
+    // Trả về cho ESP32
     return new Response(
       JSON.stringify({
-        audioContent: audio,
+        audioContent: audioContent,
         encoding: "LINEAR16",
         sampleRate: 16000
       }),
@@ -92,14 +84,17 @@ ${text}
         headers: { "Content-Type": "application/json" }
       }
     );
+
   } catch (err) {
     return new Response(
       JSON.stringify({
-        error: "Server crash",
+        error: "Server error",
         details: String(err)
       }),
-      { status: 500 }
+      { 
+        status: 500,
+        headers: { "Content-Type": "application/json" }
+      }
     );
   }
 }
-
