@@ -1,38 +1,60 @@
-import { exec } from "child_process";
-import { promisify } from "util";
-const run = promisify(exec);
-
 export const config = {
-  runtime: "nodejs20.x"
+  runtime: "edge"
 };
 
-export default async function handler(req, res) {
+export default async function handler(req) {
   try {
-    const { text } = await req.body
-      ? Promise.resolve(req.body)
-      : new Promise(resolve => {
-          let body = "";
-          req.on("data", chunk => (body += chunk));
-          req.on("end", () => resolve(JSON.parse(body)));
-        });
+    const body = await req.json();
+    const text = body?.text;
 
-    if (!text) return res.status(400).json({ error: "Text missing" });
+    if (!text) {
+      return new Response(JSON.stringify({ error: "Text missing" }), { status: 400 });
+    }
 
-    // Lệnh Edge TTS → xuất ra WAV LINEAR16 16kHz
-    const cmd = `edge-tts --text "${text}" --voice vi-VN-HoaiMyNeural --rate=0% --volume=0% --format audio-16khz-16bit-mono-pcm --write-media output.wav`;
+    const ssml = `
+      <speak version="1.0" xml:lang="vi-VN">
+        <voice name="vi-VN-HoaiMyNeural">
+          ${text}
+        </voice>
+      </speak>
+    `;
 
-    await run(cmd);
+    const resp = await fetch(
+      "https://speech.platform.bing.com/synthesize",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/ssml+xml",
+          "X-Microsoft-OutputFormat": "raw-16khz-16bit-mono-pcm",
+          "User-Agent": "ESP32-TTS"
+        },
+        body: ssml
+      }
+    );
 
-    const fs = await import("fs");
-    const audio = fs.readFileSync("output.wav");
-    const base64 = audio.toString("base64");
+    if (!resp.ok) {
+      return new Response(
+        JSON.stringify({ error: "TTS request failed", status: resp.status }),
+        { status: 500 }
+      );
+    }
 
-    res.status(200).json({
-      audioContent: base64,
-      sampleRate: 16000,
-      encoding: "LINEAR16"
-    });
-  } catch (e) {
-    res.status(500).json({ error: "EdgeTTS error", details: String(e) });
+    const buffer = await resp.arrayBuffer();
+    const base64 = Buffer.from(buffer).toString("base64");
+
+    return new Response(
+      JSON.stringify({
+        audioContent: base64,
+        sampleRate: 16000,
+        encoding: "LINEAR16"
+      }),
+      { status: 200, headers: { "Content-Type": "application/json" } }
+    );
+
+  } catch (err) {
+    return new Response(
+      JSON.stringify({ error: "Server error", details: String(err) }),
+      { status: 500 }
+    );
   }
 }
