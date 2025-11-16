@@ -2,6 +2,61 @@ export const config = {
   runtime: "edge"
 };
 
+async function createAccessToken() {
+  const now = Math.floor(Date.now() / 1000);
+
+  const header = {
+    alg: "RS256",
+    typ: "JWT"
+    };
+    
+  const payload = {
+    iss: process.env.GOOGLE_CLIENT_EMAIL,
+    scope: "https://www.googleapis.com/auth/cloud-platform",
+    aud: "https://oauth2.googleapis.com/token",
+    exp: now + 3600,
+    iat: now
+  };
+
+  function base64url(input) {
+    return btoa(String.fromCharCode(...new Uint8Array(input)))
+      .replace(/\+/g, "-")
+      .replace(/\//g, "_")
+      .replace(/=+$/, "");
+  }
+
+  // Encode header + payload
+  const encoder = new TextEncoder();
+  const data = `${btoa(JSON.stringify(header))}.${btoa(JSON.stringify(payload))}`;
+
+  // Import private key (fix newline)
+  const privateKeyPem = process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, "\n");
+
+  const key = await crypto.subtle.importKey(
+    "pkcs8",
+    convertPemToBinary(privateKeyPem),
+    { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+
+  const signature = await crypto.subtle.sign(
+    "RSASSA-PKCS1-v1_5",
+    key,
+    encoder.encode(data)
+  );
+
+  return `${data}.${base64url(signature)}`;
+}
+
+function convertPemToBinary(pem) {
+  const b64 = pem.replace(/-----[^-]+-----/g, "").replace(/\s/g, "");
+  const raw = atob(b64);
+  const buffer = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) buffer[i] = raw.charCodeAt(i);
+  return buffer;
+}
+
 export default async function handler(req) {
   try {
     const { text } = await req.json();
@@ -13,88 +68,55 @@ export default async function handler(req) {
       });
     }
 
-    // Thử dùng API key trong header (một số trường hợp có thể work)
-    const apiKey = process.env.GOOGLE_API_KEY;
-    if (!apiKey) {
-      return new Response(JSON.stringify({ error: "Missing GOOGLE_API_KEY" }), {
-        status: 500,
-        headers: { "Content-Type": "application/json" }
-      });
+    // Create OAuth access token from Service Account
+    const jwt = await createAccessToken();
+
+    const tokenResp = await fetch("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: `grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=${jwt}`
+    });
+
+    const tokenJson = await tokenResp.json();
+
+    if (!tokenResp.ok) {
+      return new Response(JSON.stringify(tokenJson), { status: 500 });
     }
 
-    const ttsUrl = "https://texttospeech.googleapis.com/v1/text:synthesize";
-    
-    const ttsResponse = await fetch(`${ttsUrl}?key=${apiKey}`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Goog-Api-Key": apiKey  // Thử thêm header này
-      },
-      body: JSON.stringify({
-        input: { text: text },
-        voice: {
-          languageCode: "vi-VN",
-          name: "vi-VN-Wavenet-A"
+    const accessToken = tokenJson.access_token;
+
+    // Call TTS API
+    const ttsResponse = await fetch(
+      "https://texttospeech.googleapis.com/v1/text:synthesize",
+      {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${accessToken}`,
+          "Content-Type": "application/json"
         },
-        audioConfig: {
-          audioEncoding: "LINEAR16",
-          sampleRateHertz: 16000
-        }
-      })
-    });
+        body: JSON.stringify({
+          input: { text },
+          voice: { languageCode: "vi-VN", name: "vi-VN-Wavenet-A" },
+          audioConfig: { audioEncoding: "LINEAR16", sampleRateHertz: 16000 }
+        })
+      }
+    );
 
     const ttsJson = await ttsResponse.json();
 
     if (!ttsResponse.ok) {
-      return new Response(
-        JSON.stringify({
-          error: "Google TTS API failed",
-          details: ttsJson,
-          hint: "Cần setup OAuth2 Service Account hoặc kiểm tra API key đã enable Text-to-Speech API chưa"
-        }),
-        { 
-          status: ttsResponse.status,
-          headers: { "Content-Type": "application/json" }
-        }
-      );
+      return new Response(JSON.stringify(ttsJson), { status: 500 });
     }
 
-    const audioContent = ttsJson.audioContent;
-    if (!audioContent) {
-      return new Response(
-        JSON.stringify({
-          error: "No audioContent in TTS response",
-          raw: ttsJson
-        }),
-        { 
-          status: 500,
-          headers: { "Content-Type": "application/json" }
-        }
-      );
-    }
-
-    return new Response(
-      JSON.stringify({
-        audioContent: audioContent,
-        encoding: "LINEAR16",
-        sampleRate: 16000
-      }),
-      {
-        status: 200,
-        headers: { "Content-Type": "application/json" }
-      }
-    );
+    return new Response(JSON.stringify(ttsJson), {
+      status: 200,
+      headers: { "Content-Type": "application/json" }
+    });
 
   } catch (err) {
-    return new Response(
-      JSON.stringify({
-        error: "Server error",
-        details: String(err)
-      }),
-      { 
-        status: 500,
-        headers: { "Content-Type": "application/json" }
-      }
-    );
+    return new Response(JSON.stringify({ error: String(err) }), {
+      status: 500,
+      headers: { "Content-Type": "application/json" }
+    });
   }
 }
