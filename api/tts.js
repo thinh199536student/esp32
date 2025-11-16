@@ -13,6 +13,7 @@ export default async function handler(req) {
       });
     }
 
+    // Thử dùng API key trong header (một số trường hợp có thể work)
     const apiKey = process.env.GOOGLE_API_KEY;
     if (!apiKey) {
       return new Response(JSON.stringify({ error: "Missing GOOGLE_API_KEY" }), {
@@ -21,22 +22,22 @@ export default async function handler(req) {
       });
     }
 
-    // Gọi Google Cloud Text-to-Speech API (KHÔNG phải Gemini)
-    const ttsUrl = `https://texttospeech.googleapis.com/v1/text:synthesize?key=${apiKey}`;
+    const ttsUrl = "https://texttospeech.googleapis.com/v1/text:synthesize";
     
-    const ttsResponse = await fetch(ttsUrl, {
+    const ttsResponse = await fetch(`${ttsUrl}?key=${apiKey}`, {
       method: "POST",
       headers: {
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        "X-Goog-Api-Key": apiKey  // Thử thêm header này
       },
       body: JSON.stringify({
         input: { text: text },
         voice: {
           languageCode: "vi-VN",
-          name: "vi-VN-Wavenet-A"  // Giọng tiếng Việt
+          name: "vi-VN-Wavenet-A"
         },
         audioConfig: {
-          audioEncoding: "LINEAR16",  // PCM 16-bit
+          audioEncoding: "LINEAR16",
           sampleRateHertz: 16000
         }
       })
@@ -48,7 +49,8 @@ export default async function handler(req) {
       return new Response(
         JSON.stringify({
           error: "Google TTS API failed",
-          details: ttsJson
+          details: ttsJson,
+          hint: "Cần setup OAuth2 Service Account hoặc kiểm tra API key đã enable Text-to-Speech API chưa"
         }),
         { 
           status: ttsResponse.status,
@@ -57,7 +59,6 @@ export default async function handler(req) {
       );
     }
 
-    // Lấy audio base64 từ response
     const audioContent = ttsJson.audioContent;
     if (!audioContent) {
       return new Response(
@@ -72,7 +73,6 @@ export default async function handler(req) {
       );
     }
 
-    // Trả về cho ESP32
     return new Response(
       JSON.stringify({
         audioContent: audioContent,
