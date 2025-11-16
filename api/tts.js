@@ -32,21 +32,14 @@ export default async function handler(req) {
       }
     );
 
-    if (!resp.ok) {
-      return new Response(
-        JSON.stringify({ error: "TTS request failed", status: resp.status }),
-        { status: 500 }
-      );
-    }
-
-    const buffer = await resp.arrayBuffer();
-    const base64 = Buffer.from(buffer).toString("base64");
+    const buf = await resp.arrayBuffer();
+    const base64 = Buffer.from(buf).toString("base64");
 
     return new Response(
       JSON.stringify({
         audioContent: base64,
-        sampleRate: 16000,
-        encoding: "LINEAR16"
+        encoding: "LINEAR16",
+        sampleRate: 16000
       }),
       { status: 200, headers: { "Content-Type": "application/json" } }
     );
