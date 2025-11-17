@@ -8,8 +8,8 @@ async function createAccessToken() {
   const header = {
     alg: "RS256",
     typ: "JWT"
-    };
-    
+  };
+
   const payload = {
     iss: process.env.GOOGLE_CLIENT_EMAIL,
     scope: "https://www.googleapis.com/auth/cloud-platform",
@@ -18,18 +18,9 @@ async function createAccessToken() {
     iat: now
   };
 
-  function base64url(input) {
-    return btoa(String.fromCharCode(...new Uint8Array(input)))
-      .replace(/\+/g, "-")
-      .replace(/\//g, "_")
-      .replace(/=+$/, "");
-  }
-
-  // Encode header + payload
   const encoder = new TextEncoder();
   const data = `${btoa(JSON.stringify(header))}.${btoa(JSON.stringify(payload))}`;
 
-  // Import private key (fix newline)
   const privateKeyPem = process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, "\n");
 
   const key = await crypto.subtle.importKey(
@@ -49,6 +40,13 @@ async function createAccessToken() {
   return `${data}.${base64url(signature)}`;
 }
 
+function base64url(input) {
+  return btoa(String.fromCharCode(...new Uint8Array(input)))
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
+}
+
 function convertPemToBinary(pem) {
   const b64 = pem.replace(/-----[^-]+-----/g, "").replace(/\s/g, "");
   const raw = atob(b64);
@@ -62,13 +60,12 @@ export default async function handler(req) {
     const { text } = await req.json();
 
     if (!text) {
-      return new Response(JSON.stringify({ error: "No text provided" }), {
+      return new Response(`{"error":"No text provided"}`, {
         status: 400,
         headers: { "Content-Type": "application/json" }
       });
     }
 
-    // Create OAuth access token from Service Account
     const jwt = await createAccessToken();
 
     const tokenResp = await fetch("https://oauth2.googleapis.com/token", {
@@ -85,8 +82,8 @@ export default async function handler(req) {
 
     const accessToken = tokenJson.access_token;
 
-    // Call TTS API
-    const ttsResponse = await fetch(
+    // Google TTS request
+    const ttsResp = await fetch(
       "https://texttospeech.googleapis.com/v1/text:synthesize",
       {
         method: "POST",
@@ -97,24 +94,34 @@ export default async function handler(req) {
         body: JSON.stringify({
           input: { text },
           voice: { languageCode: "vi-VN", name: "vi-VN-Wavenet-A" },
-          audioConfig: { audioEncoding: "LINEAR16", sampleRateHertz: 16000 }
+          audioConfig: {
+            audioEncoding: "LINEAR16",
+            sampleRateHertz: 16000
+          }
         })
       }
     );
 
-    const ttsJson = await ttsResponse.json();
+    const ttsJson = await ttsResp.json();
 
-    if (!ttsResponse.ok) {
+    if (!ttsResp.ok) {
       return new Response(JSON.stringify(ttsJson), { status: 500 });
     }
 
-    return new Response(JSON.stringify(ttsJson), {
-      status: 200,
-      headers: { "Content-Type": "application/json" }
-    });
+    // ⭐ FIX: TRẢ JSON SẠCH — KHÔNG JSON.stringify() object lớn
+    return new Response(
+      `{"audioContent":"${ttsJson.audioContent}"}`,
+      {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json",
+          "Cache-Control": "no-cache"
+        }
+      }
+    );
 
   } catch (err) {
-    return new Response(JSON.stringify({ error: String(err) }), {
+    return new Response(`{"error":"${String(err)}"}`, {
       status: 500,
       headers: { "Content-Type": "application/json" }
     });
