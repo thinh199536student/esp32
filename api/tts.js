@@ -98,10 +98,11 @@ export default async function handler(req) {
       status: 200,
       headers: {
         "Content-Type": "application/json",
-        "Content-Length": String(Buffer.byteLength(out)), // <<< ép JSON full-body
-        "Cache-Control": "no-store"
+        "Cache-Control": "no-store",
+        "Connection": "close"
       }
     });
+
 
   } catch (err) {
     return new Response(JSON.stringify({ error: String(err) }), {
@@ -110,3 +111,4 @@ export default async function handler(req) {
     });
   }
 }
+
