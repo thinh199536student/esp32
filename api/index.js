@@ -18,34 +18,36 @@ export default async function handler(req) {
       );
     }
 
-    const apiRes = await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=" + process.env.GOOGLE_API_KEY, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        input: text,
-        voice: "ALLOY",
-        audioConfig: {
-          audioEncoding: "LINEAR16",
-          sampleRateHertz: 16000
-        }
-      }),
-    });
+    const apiRes = await fetch(
+      "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-tts:generateSpeech?key=" +
+        process.env.GOOGLE_API_KEY,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          input: text,
+          audioConfig: {
+            audioEncoding: "LINEAR16",
+            sampleRateHertz: 16000,
+          },
+        }),
+      }
+    );
 
     const data = await apiRes.json();
 
     if (!data.audioContent) {
       return Response.json(
-        { error: "API không trả audioContent", raw: data },
+        { error: "Không có audioContent trong response", raw: data },
         { status: 500 }
       );
     }
 
     return Response.json({
-      audioContent: data.audioContent   // base64 WAV
+      audioContent: data.audioContent,
     });
-
   } catch (err) {
     return Response.json(
       { error: "Server crashed", detail: err.message },
@@ -53,4 +55,3 @@ export default async function handler(req) {
     );
   }
 }
-
