@@ -35,7 +35,7 @@ export default async function handler(req) {
     // CALL GOOGLE GEN-LANG TTS API
     // --------------------------------
     const apiUrl =
-      "https://generativelanguage.googleapis.com/v1beta/models/gemini-robotics-er-1.5-preview:generateSpeech?key=" +
+      "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateSpeech?key=" +
       process.env.GOOGLE_API_KEY;
 
     const apiRes = await fetch(apiUrl, {
@@ -103,5 +103,6 @@ export default async function handler(req) {
     );
   }
 }
+
 
 
