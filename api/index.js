@@ -24,7 +24,7 @@ export default async function handler(req) {
     }
 
     const apiRes = await fetch(
-      "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateSpeech?key=" +
+      "https://generativelanguage.googleapis.com/v1beta/models/gemini-robotics-er-1.5-preview:generateSpeech?key=" +
         process.env.GOOGLE_API_KEY,
       {
         method: "POST",
@@ -75,4 +75,5 @@ export default async function handler(req) {
     );
   }
 }
+
 
