@@ -1,5 +1,5 @@
 export const config = {
-  runtime: "edge"
+  runtime: "nodejs18.x"   // <<< FIX QUAN TRỌNG
 };
 
 // Base64URL encode
@@ -8,30 +8,21 @@ function base64urlEncode(bytes) {
   for (let i = 0; i < bytes.length; i++) {
     str += String.fromCharCode(bytes[i]);
   }
-  return btoa(str)
+  return Buffer.from(str, "binary")
+    .toString("base64")
     .replace(/\+/g, "-")
     .replace(/\//g, "_")
     .replace(/=+$/, "");
 }
 
-// Convert PEM → Uint8Array
 function pemToBinary(pem) {
   const b64 = pem.replace(/-----[^-]+-----/g, "").replace(/\s/g, "");
-  const raw = atob(b64);
-  const out = new Uint8Array(raw.length);
-  for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
-  return out;
+  return Buffer.from(b64, "base64");
 }
 
-// Create JWT for Google OAuth
 async function createAccessToken() {
   const now = Math.floor(Date.now() / 1000);
-
-  const header = {
-    alg: "RS256",
-    typ: "JWT"
-  };
-
+  const header = { alg: "RS256", typ: "JWT" };
   const payload = {
     iss: process.env.GOOGLE_CLIENT_EMAIL,
     scope: "https://www.googleapis.com/auth/cloud-platform",
@@ -40,31 +31,19 @@ async function createAccessToken() {
     iat: now
   };
 
-  const headerB64 = base64urlEncode(
-    new TextEncoder().encode(JSON.stringify(header))
-  );
-  const payloadB64 = base64urlEncode(
-    new TextEncoder().encode(JSON.stringify(payload))
-  );
+  const headerB64 = base64urlEncode(Buffer.from(JSON.stringify(header)));
+  const payloadB64 = base64urlEncode(Buffer.from(JSON.stringify(payload)));
 
   const toSign = `${headerB64}.${payloadB64}`;
 
-  const key = await crypto.subtle.importKey(
-    "pkcs8",
-    pemToBinary(process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, "\n")),
-    { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
-    false,
-    ["sign"]
-  );
+  const privateKey = {
+    key: process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, "\n"),
+    padding: crypto.constants.RSA_PKCS1_PADDING
+  };
 
-  const signature = await crypto.subtle.sign(
-    "RSASSA-PKCS1-v1_5",
-    key,
-    new TextEncoder().encode(toSign)
-  );
+  const signature = crypto.sign("RSA-SHA256", Buffer.from(toSign), privateKey);
 
-  const signatureB64 = base64urlEncode(new Uint8Array(signature));
-  return `${toSign}.${signatureB64}`;
+  return `${toSign}.${base64urlEncode(signature)}`;
 }
 
 export default async function handler(req) {
@@ -78,10 +57,8 @@ export default async function handler(req) {
       });
     }
 
-    // STEP 1: create JWT
     const jwt = await createAccessToken();
 
-    // STEP 2: Exchange JWT → access_token
     const tokenResp = await fetch("https://oauth2.googleapis.com/token", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -93,7 +70,6 @@ export default async function handler(req) {
 
     const accessToken = tokenJson.access_token;
 
-    // STEP 3: Google TTS Request
     const ttsResp = await fetch(
       "https://texttospeech.googleapis.com/v1/text:synthesize",
       {
@@ -116,14 +92,16 @@ export default async function handler(req) {
     const ttsJson = await ttsResp.json();
     if (!ttsResp.ok) return new Response(JSON.stringify(ttsJson), { status: 500 });
 
-    // STEP 4: return audioContent (base64 LINEAR16)
-    return new Response(
-      JSON.stringify({ audioContent: ttsJson.audioContent }),
-      {
-        status: 200,
-        headers: { "Content-Type": "application/json" }
+    const out = JSON.stringify({ audioContent: ttsJson.audioContent });
+
+    return new Response(out, {
+      status: 200,
+      headers: {
+        "Content-Type": "application/json",
+        "Content-Length": String(Buffer.byteLength(out)), // <<< ép JSON full-body
+        "Cache-Control": "no-store"
       }
-    );
+    });
 
   } catch (err) {
     return new Response(JSON.stringify({ error: String(err) }), {
