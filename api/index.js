@@ -8,7 +8,19 @@ export default async function handler(req) {
       return new Response("Only POST allowed", { status: 405 });
     }
 
-    const body = await req.json();
+    // ----------------------------
+    // SAFE JSON PARSE
+    // ----------------------------
+    let body = {};
+    try {
+      body = await req.json();
+    } catch (err) {
+      return Response.json(
+        { error: "Body is not valid JSON" },
+        { status: 400 }
+      );
+    }
+
     const text = body.text || "";
 
     if (!text || text.length < 1) {
@@ -36,7 +48,15 @@ export default async function handler(req) {
       }
     );
 
-    const data = await apiRes.json();
+    let data;
+    try {
+      data = await apiRes.json();
+    } catch (err) {
+      return Response.json(
+        { error: "Cannot parse JSON from Google API" },
+        { status: 500 }
+      );
+    }
 
     if (!data.audioContent) {
       return Response.json(
@@ -48,6 +68,7 @@ export default async function handler(req) {
     return Response.json({
       audioContent: data.audioContent,
     });
+
   } catch (err) {
     return Response.json(
       { error: "Server crashed", detail: err.message },
