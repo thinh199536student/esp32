@@ -18,7 +18,7 @@ export default async function handler(req) {
       );
     }
 
-    const apiRes = await fetch("https://generativelanguage.googleapis.com/v1beta/models/gpt-4o-mini-tts:generateSpeech?key=" + process.env.GOOGLE_API_KEY, {
+    const apiRes = await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=" + process.env.GOOGLE_API_KEY, {
       method: "POST",
       headers: {
         "Content-Type": "application/json"
@@ -53,3 +53,4 @@ export default async function handler(req) {
     );
   }
 }
+
