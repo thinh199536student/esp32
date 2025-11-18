@@ -8,9 +8,6 @@ export default async function handler(req) {
       return new Response("Only POST allowed", { status: 405 });
     }
 
-    // ----------------------------
-    // SAFE JSON PARSE
-    // ----------------------------
     let body = {};
     try {
       body = await req.json();
@@ -22,12 +19,8 @@ export default async function handler(req) {
     }
 
     const text = body.text || "";
-
-    if (!text || text.length < 1) {
-      return Response.json(
-        { error: "Missing text field" },
-        { status: 400 }
-      );
+    if (!text) {
+      return Response.json({ error: "Missing text field" }, { status: 400 });
     }
 
     const apiRes = await fetch(
@@ -48,12 +41,21 @@ export default async function handler(req) {
       }
     );
 
+    // -----------------------
+    // 🔥 DEBUG GOOGLE RESPONSE
+    // -----------------------
+    const rawText = await apiRes.text();
+    console.log("GOOGLE RAW RESPONSE:", rawText);
+
     let data;
     try {
-      data = await apiRes.json();
+      data = JSON.parse(rawText);
     } catch (err) {
       return Response.json(
-        { error: "Cannot parse JSON from Google API" },
+        {
+          error: "Google API did not return valid JSON",
+          raw: rawText,
+        },
         { status: 500 }
       );
     }
@@ -65,10 +67,7 @@ export default async function handler(req) {
       );
     }
 
-    return Response.json({
-      audioContent: data.audioContent,
-    });
-
+    return Response.json({ audioContent: data.audioContent });
   } catch (err) {
     return Response.json(
       { error: "Server crashed", detail: err.message },
