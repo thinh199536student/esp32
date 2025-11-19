@@ -4,97 +4,74 @@ export const config = {
 
 export default async function handler(req) {
   try {
-    // Chỉ cho POST
     if (req.method !== "POST") {
       return new Response("Only POST allowed", { status: 405 });
     }
 
-    // -----------------------------
-    // SAFE PARSE JSON BODY
-    // -----------------------------
-    let body = {};
+    let body;
     try {
       body = await req.json();
-    } catch (err) {
-      return Response.json(
-        { error: "Body is not valid JSON" },
-        { status: 400 }
-      );
+    } catch {
+      return Response.json({ error: "Invalid JSON" }, { status: 400 });
     }
 
     const text = body.text || "";
-
-    if (!text || text.length === 0) {
-      return Response.json(
-        { error: "Missing text field" },
-        { status: 400 }
-      );
+    if (!text) {
+      return Response.json({ error: "Missing text" }, { status: 400 });
     }
 
-    // --------------------------------
-    // CALL GOOGLE GEN-LANG TTS API
-    // --------------------------------
+    // 🔥 Endpoint TTS CHUẨN
     const apiUrl =
       "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=" +
       process.env.GOOGLE_API_KEY;
 
     const apiRes = await fetch(apiUrl, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        input: text,
-        audioConfig: {
-          audioEncoding: "LINEAR16",
-          sampleRateHertz: 16000,
+        contents: [
+          {
+            role: "user",
+            parts: [
+              {
+                text: text
+              }
+            ],
+          },
+        ],
+        generationConfig: {
+          responseMimeType: "audio/wav",
         },
       }),
     });
 
-    // --------------------------------
-    // DEBUG GOOGLE RESPONSE
-    // --------------------------------
-
-    // Log status
     console.log("GOOGLE STATUS:", apiRes.status);
+    const raw = await apiRes.text();
+    console.log("GOOGLE RAW RESPONSE:", raw);
 
-    // Read response as text
-    const rawText = await apiRes.text();
-
-    // Log raw body
-    console.log("GOOGLE RAW RESPONSE:", rawText);
-
-    let data;
-    try {
-      data = JSON.parse(rawText);
-    } catch (err) {
+    if (!apiRes.ok) {
       return Response.json(
-        {
-          error: "Google API did not return valid JSON",
-          status: apiRes.status,
-          raw: rawText,
-        },
-        { status: 500 }
+        { error: "Google API Error", status: apiRes.status, raw },
+        { status: apiRes.status }
       );
     }
 
-    // Check dữ liệu hợp lệ
-    if (!data.audioContent) {
+    const data = JSON.parse(raw);
+
+    const audioBase64 =
+      data.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+
+    if (!audioBase64) {
       return Response.json(
         {
-          error: "Không có audioContent trong response",
-          status: apiRes.status,
+          error: "Missing audioContent",
           raw: data,
         },
         { status: 500 }
       );
     }
 
-    // Trả kết quả
-    return Response.json({
-      audioContent: data.audioContent,
-    });
+    return Response.json({ audioContent: audioBase64 });
 
   } catch (err) {
     return Response.json(
@@ -103,12 +80,3 @@ export default async function handler(req) {
     );
   }
 }
-
-
-
-
-
-
-
-
-
