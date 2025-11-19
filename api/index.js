@@ -8,14 +8,25 @@ export default async function handler(req) {
       return new Response("Only POST allowed", { status: 405 });
     }
 
-    const { text } = await req.json();
+    let body;
+    try {
+      body = await req.json();
+    } catch (err) {
+      return Response.json({ error: "Invalid JSON body" }, { status: 400 });
+    }
+
+    const text = body.text;
     if (!text) {
       return Response.json({ error: "Missing text" }, { status: 400 });
     }
 
-    const apiUrl =
-      "https://texttospeech.googleapis.com/v1/text:synthesize?key=" +
-      process.env.GOOGLE_API_KEY;
+    const apiKey = process.env.GOOGLE_API_KEY;
+    if (!apiKey) {
+      return Response.json({ error: "Missing GOOGLE_API_KEY" }, { status: 500 });
+    }
+
+    const url =
+      "https://texttospeech.googleapis.com/v1/text:synthesize?key=" + apiKey;
 
     const payload = {
       input: { text },
@@ -24,31 +35,40 @@ export default async function handler(req) {
         name: "vi-VN-Wavenet-A",
       },
       audioConfig: {
-        audioEncoding: "LINEAR16", // WAV 16bit
-        speakingRate: 1.0,
+        audioEncoding: "LINEAR16",
       },
     };
 
-    const apiRes = await fetch(apiUrl, {
+    const googleRes = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
 
-    const raw = await apiRes.text();
-    if (!apiRes.ok) {
+    const raw = await googleRes.text();
+
+    if (!googleRes.ok) {
       return Response.json(
-        { error: "Google TTS error", status: apiRes.status, raw },
+        {
+          error: "Google TTS error",
+          status: googleRes.status,
+          raw,
+        },
         { status: 500 }
       );
     }
 
-    const data = JSON.parse(raw);
-
-    return Response.json({
-      audioContent: data.audioContent, // base64 WAV
+    // Đây là điểm quan trọng: server TRẢ VỀ JSON THUẦN
+    return new Response(raw, {
+      status: 200,
+      headers: {
+        "Content-Type": "application/json",
+      },
     });
   } catch (err) {
-    return Response.json({ error: err.message }, { status: 500 });
+    return Response.json(
+      { error: "Server crashed", detail: err.message },
+      { status: 500 }
+    );
   }
 }
