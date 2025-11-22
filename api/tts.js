@@ -1,95 +1,70 @@
 export const config = {
-  runtime: "nodejs", // QUAN TRỌNG: tắt chunked
+  runtime: "nodejs",
 };
 
 export default async function handler(req) {
   try {
     if (req.method !== "POST") {
-      const msg = JSON.stringify({ error: "Only POST allowed" });
-      return new Response(msg, {
-        status: 405,
-        headers: {
-          "Content-Type": "application/json",
-          "Content-Length": Buffer.byteLength(msg).toString()
-        }
-      });
+      return plainResponse({ error: "Only POST allowed" }, 405);
     }
 
     const body = await req.json();
-    const text = body.text || "";
+    const text = body.text?.trim();
 
-    if (!text.trim()) {
-      const msg = JSON.stringify({ error: "Missing text field" });
-      return new Response(msg, {
-        status: 400,
-        headers: {
-          "Content-Type": "application/json",
-          "Content-Length": Buffer.byteLength(msg).toString()
-        }
-      });
+    if (!text) {
+      return plainResponse({ error: "Missing text" }, 400);
     }
 
     const apiKey = process.env.GOOGLE_API_KEY;
     if (!apiKey) {
-      const msg = JSON.stringify({ error: "Missing GOOGLE_API_KEY" });
-      return new Response(msg, {
-        status: 500,
-        headers: {
-          "Content-Type": "application/json",
-          "Content-Length": Buffer.byteLength(msg).toString()
-        }
-      });
+      return plainResponse({ error: "Missing GOOGLE_API_KEY" }, 500);
     }
 
+    // Tối ưu fetch (timeout 6 giây)
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 6000);
+
     const googleRes = await fetch(
-      "https://texttospeech.googleapis.com/v1/text:synthesize?key=" + apiKey,
+      `https://texttospeech.googleapis.com/v1/text:synthesize?key=${apiKey}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           input: { text },
           voice: { languageCode: "vi-VN", name: "vi-VN-Neural2-D" },
-          audioConfig: {
-            audioEncoding: "LINEAR16",
-            sampleRateHertz: 8000
-          }
-        })
+          audioConfig: { audioEncoding: "LINEAR16", sampleRateHertz: 8000 }
+        }),
+        signal: controller.signal
       }
-    );
+    ).catch(err => ({ error: err }));
+
+    clearTimeout(timeout);
+
+    if (!googleRes || googleRes.error) {
+      return plainResponse({ error: "Google TTS timeout" }, 504);
+    }
 
     const data = await googleRes.json();
 
     if (!data.audioContent) {
-      const msg = JSON.stringify({ error: "Google TTS error", raw: data });
-      return new Response(msg, {
-        status: 500,
-        headers: {
-          "Content-Type": "application/json",
-          "Content-Length": Buffer.byteLength(msg).toString()
-        }
-      });
+      return plainResponse({ error: "Google TTS error", raw: data }, 500);
     }
 
-    const responseBody = JSON.stringify({
-      audioContent: data.audioContent
-    });
-
-    return new Response(responseBody, {
-      status: 200,
-      headers: {
-        "Content-Type": "application/json",
-        "Content-Length": Buffer.byteLength(responseBody).toString()
-      }
-    });
+    return plainResponse({ audioContent: data.audioContent }, 200);
 
   } catch (err) {
-    const msg = JSON.stringify({ error: err.message });
-    return new Response(msg, {
-      status: 500,
-      headers: {
-        "Content-Type": "application/json",
-        "Content-Length": Buffer.byteLength(msg).toString()
-      }
-    });
+    return plainResponse({ error: err.message }, 500);
   }
+}
+
+/* Helper: Trả về JSON + Content-Length */
+function plainResponse(obj, status = 200) {
+  const body = JSON.stringify(obj);
+  return new Response(body, {
+    status,
+    headers: {
+      "Content-Type": "application/json",
+      "Content-Length": Buffer.byteLength(body).toString()
+    }
+  });
 }
