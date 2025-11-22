@@ -1,64 +1,59 @@
 export const config = {
-  runtime: "nodejs",
+  runtime: "nodejs",  // BẮT BUỘC ĐỂ TẮT CHUNKED
 };
 
 export default async function handler(req) {
   try {
     if (req.method !== "POST") {
-      return plainResponse({ error: "Only POST allowed" }, 405);
+      return jsonResponse({ error: "Only POST allowed" }, 405);
     }
 
     const body = await req.json();
-    const text = body.text?.trim();
+    const text = body.text || "";
 
-    if (!text) {
-      return plainResponse({ error: "Missing text" }, 400);
+    if (!text || text.trim().length === 0) {
+      return jsonResponse({ error: "Missing text field" }, 400);
     }
 
     const apiKey = process.env.GOOGLE_API_KEY;
     if (!apiKey) {
-      return plainResponse({ error: "Missing GOOGLE_API_KEY" }, 500);
+      return jsonResponse({ error: "Missing GOOGLE_API_KEY" }, 500);
     }
 
-    // Tối ưu fetch (timeout 6 giây)
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 6000);
-
     const googleRes = await fetch(
-      `https://texttospeech.googleapis.com/v1/text:synthesize?key=${apiKey}`,
+      "https://texttospeech.googleapis.com/v1/text:synthesize?key=" + apiKey,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           input: { text },
           voice: { languageCode: "vi-VN", name: "vi-VN-Neural2-D" },
-          audioConfig: { audioEncoding: "LINEAR16", sampleRateHertz: 8000 }
-        }),
-        signal: controller.signal
+          audioConfig: {
+            audioEncoding: "LINEAR16",
+            sampleRateHertz: 8000
+          }
+        })
       }
-    ).catch(err => ({ error: err }));
-
-    clearTimeout(timeout);
-
-    if (!googleRes || googleRes.error) {
-      return plainResponse({ error: "Google TTS timeout" }, 504);
-    }
+    );
 
     const data = await googleRes.json();
 
     if (!data.audioContent) {
-      return plainResponse({ error: "Google TTS error", raw: data }, 500);
+      return jsonResponse({ error: "Google TTS error", raw: data }, 500);
     }
 
-    return plainResponse({ audioContent: data.audioContent }, 200);
+    return jsonResponse({ audioContent: data.audioContent }, 200);
 
   } catch (err) {
-    return plainResponse({ error: err.message }, 500);
+    return jsonResponse({ error: err.message }, 500);
   }
 }
 
-/* Helper: Trả về JSON + Content-Length */
-function plainResponse(obj, status = 200) {
+/*
+  🔥 Helper tạo JSON response với Content-Length
+  → TẮT CHUNKED trên Vercel Node.js Runtime
+*/
+function jsonResponse(obj, status = 200) {
   const body = JSON.stringify(obj);
   return new Response(body, {
     status,
