@@ -1,23 +1,44 @@
 export const config = {
-  runtime: "edge",
+  runtime: "nodejs", // QUAN TRỌNG: tắt chunked
 };
 
 export default async function handler(req) {
   try {
     if (req.method !== "POST") {
-      return new Response(JSON.stringify({ error: "Only POST allowed" }), { status: 405 });
+      const msg = JSON.stringify({ error: "Only POST allowed" });
+      return new Response(msg, {
+        status: 405,
+        headers: {
+          "Content-Type": "application/json",
+          "Content-Length": Buffer.byteLength(msg).toString()
+        }
+      });
     }
 
     const body = await req.json();
     const text = body.text || "";
 
-    if (!text || text.trim().length === 0) {
-      return new Response(JSON.stringify({ error: "Missing text field" }), { status: 400 });
+    if (!text.trim()) {
+      const msg = JSON.stringify({ error: "Missing text field" });
+      return new Response(msg, {
+        status: 400,
+        headers: {
+          "Content-Type": "application/json",
+          "Content-Length": Buffer.byteLength(msg).toString()
+        }
+      });
     }
 
     const apiKey = process.env.GOOGLE_API_KEY;
     if (!apiKey) {
-      return new Response(JSON.stringify({ error: "Missing GOOGLE_API_KEY" }), { status: 500 });
+      const msg = JSON.stringify({ error: "Missing GOOGLE_API_KEY" });
+      return new Response(msg, {
+        status: 500,
+        headers: {
+          "Content-Type": "application/json",
+          "Content-Length": Buffer.byteLength(msg).toString()
+        }
+      });
     }
 
     const googleRes = await fetch(
@@ -39,15 +60,36 @@ export default async function handler(req) {
     const data = await googleRes.json();
 
     if (!data.audioContent) {
-      return new Response(JSON.stringify({ error: "Google TTS error", raw: data }), { status: 500 });
+      const msg = JSON.stringify({ error: "Google TTS error", raw: data });
+      return new Response(msg, {
+        status: 500,
+        headers: {
+          "Content-Type": "application/json",
+          "Content-Length": Buffer.byteLength(msg).toString()
+        }
+      });
     }
 
-    return new Response(
-      JSON.stringify({ audioContent: data.audioContent }),
-      { status: 200, headers: { "Content-Type": "application/json" } }
-    );
+    const responseBody = JSON.stringify({
+      audioContent: data.audioContent
+    });
+
+    return new Response(responseBody, {
+      status: 200,
+      headers: {
+        "Content-Type": "application/json",
+        "Content-Length": Buffer.byteLength(responseBody).toString()
+      }
+    });
 
   } catch (err) {
-    return new Response(JSON.stringify({ error: err.message }), { status: 500 });
+    const msg = JSON.stringify({ error: err.message });
+    return new Response(msg, {
+      status: 500,
+      headers: {
+        "Content-Type": "application/json",
+        "Content-Length": Buffer.byteLength(msg).toString()
+      }
+    });
   }
 }
